@@ -65,7 +65,8 @@ class TelegramBot:
 
     def connect_to_database(self):
         try:
-            return Database(host="localhost", user="root", password="", database="telegram_bot_db")
+            # return Database(host="localhost", user="root", password="", database="telegram_bot_db")
+            return Database(host="mychatlahbotserver.mysql.database.azure.com", user="sheila@mychatlahbotserver", password="JoelLim1212!", database="telegram_bot_db")
         except ConnectionError as e:
             print(e)
             raise
