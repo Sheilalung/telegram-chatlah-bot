@@ -2,7 +2,8 @@ import mysql.connector
 from mysql.connector import Error
 
 class Database:
-    def __init__(self, host="localhost", user="root", password="", database="telegram_bot_db"):
+    # def __init__(self, host="localhost", user="root", password="", database="telegram_bot_db"):
+    def __init__(self, host="mychatlahbotserver.mysql.database.azure.com", user="sheila@mychatlahbotserver", password="JoelLim1212!", database="telegram_bot_db"):
         self.host = host
         self.user = user
         self.password = password
