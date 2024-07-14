@@ -3,12 +3,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler, CallbackQueryHandler, ContextTypes
 from telegram.error import TimedOut
-# new added features scheduling 
 from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
 import calendar
-# from datetime import datetime
 from datetime import datetime, timedelta, time
-# from datetime import timedelta
 from database import Database
 from html import escape
 import textwrap
@@ -33,7 +30,6 @@ TOKEN: Final = '6729973842:AAH8XIUZ_fMl1WdAlkdGnD1zOlyyZmC0ZCI'
 BOT_USERNAME: Final = '@chat_lah_bot'
 MAX_RETRIES = 3  # Maximum number of retries
 WAITING_FOR_DESCRIPTION = 1
-# REMINDER_TIME_STATE = 1  # State for conversation handler
 
 class TelegramBot:
     def __init__(self, token, bot_username):
@@ -93,20 +89,6 @@ class TelegramBot:
         else:
             print(f"Unexpected type {type(value)}: {value}")
             return "Format Error"
-        
-    # # Define the function in your bot code
-    # def parse_search_query(self, search_term):
-    #     if 'date:' in search_term:
-    #         date_part = search_term.split('date:')[1].strip()
-    #         return 'date', date_part
-    #     elif 'time:' in search_term:
-    #         time_part = search_term.split('time:')[1].strip()
-    #         return 'time', time_part
-    #     else:
-    #         return 'keyword', search_term
-
-    # async def help_command(self, update: Update, context: CallbackContext):
-    #     await update.message.reply_text('I am ChatLah! Please type anything so I can respond!')
 
     async def help_command(self, update: Update, context: CallbackContext):
         help_text = """
@@ -319,8 +301,8 @@ class TelegramBot:
         query = update.callback_query
         await query.answer()
 
-        data = query.data.split('_')  # Expected format "bulk_set_{status}"
-        status = ' '.join(data[2:])  # Convert status back from 'bulk_set_completed' to 'Completed'
+        data = query.data.split('_')  
+        status = ' '.join(data[2:])  
 
         user_id = update.effective_user.id
         success = self.db.update_all_tasks_status(user_id, status)
@@ -333,7 +315,7 @@ class TelegramBot:
         query = update.callback_query
         await query.answer()
 
-        data = query.data.split('_')  # Expected format "set_status_{status}_{task_id}"
+        data = query.data.split('_')  
         if len(data) < 4:
             await query.message.reply_text("Invalid data format.")
             return
@@ -348,22 +330,6 @@ class TelegramBot:
             await query.message.reply_text(f"Task {task_id} status updated to {status}.")
         else:
             await query.message.reply_text("Failed to update task status. Please try again.")
-
-    # async def delete_task_command(self, update: Update, context: CallbackContext):
-    #     user_id = update.message.from_user.id
-    #     if len(context.args) == 0:
-    #         await update.message.reply_text("Please provide a task ID to delete. Usage: /delete [task_id]")
-    #         return
-    #     try:
-    #         task_id = int(context.args[0])
-    #     except ValueError:
-    #         await update.message.reply_text("Invalid task ID. Please provide a numeric task ID.")
-    #         return
-
-    #     if self.db.delete_task(user_id, task_id):
-    #         await update.message.reply_text(f"Task {task_id} deleted.")
-    #     else:
-    #         await update.message.reply_text(f"Failed to delete task {task_id}.")
 
     async def delete_task_command(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
@@ -381,59 +347,6 @@ class TelegramBot:
             await update.message.reply_text(f"Task {current_user_task_id} deleted.")
         else:
             await update.message.reply_text(f"Failed to delete task {current_user_task_id}.")
-
-    # unable to double confirm with user when delete 
-    # async def delete_task_command(self, update: Update, context: CallbackContext):
-    #     user_id = update.message.from_user.id
-    #     if len(context.args) == 0:
-    #         await update.message.reply_text("Please provide a task ID to delete. Usage: /delete [task_id]")
-    #         return
-
-    #     try:
-    #         current_user_task_id = int(context.args[0])
-    #     except ValueError:
-    #         await update.message.reply_text("Invalid task ID. Please provide a numeric task ID.")
-    #         return
-
-    #     # Fetch the task details to verify and display before deletion
-    #     task_details = self.db.get_task_details_by_current_user_task_id(user_id, current_user_task_id)
-    #     if not task_details or task_details['is_deleted']:
-    #         await update.message.reply_text("Invalid task number or task already deleted.")
-    #         return
-
-    #     if 'status' not in task_details:
-    #         await update.message.reply_text("Task status information is missing.")
-    #         return
-
-    #     # Prepare confirmation message with task details
-    #     task_info = f"Description: {task_details['description']}\nStatus: {task_details['status']}\nDue Date: {task_details['due_date'].strftime('%Y-%m-%d') if task_details['due_date'] else 'Not Set'}\nDue Time: {task_details['due_time'] if task_details['due_time'] else 'Not Set'}"
-    #     confirmation_text = f"Are you sure you want to delete this task? This action cannot be undone.\n\n{task_info}"
-    #     buttons = [
-    #         InlineKeyboardButton("Confirm", callback_data=f"confirm_delete_{current_user_task_id}"),
-    #         InlineKeyboardButton("Cancel", callback_data="cancel_delete")
-    #     ]
-    #     await update.message.reply_text(confirmation_text, reply_markup=InlineKeyboardMarkup([[buttons[0], buttons[1]]]))
-
-    # async def handle_task_deletion_confirmation(self, update: Update, context: CallbackContext):
-    #     query = update.callback_query
-    #     await query.answer()
-
-    #     data = query.data.split('_')
-    #     if len(data) < 3:
-    #         await query.edit_message_text(text="Error: Invalid operation data received.")
-    #         return
-
-    #     if data[0] == "confirm" and data[1] == "delete":
-    #         current_user_task_id = int(data[2])
-    #         try:
-    #             if self.db.delete_task(query.from_user.id, current_user_task_id):
-    #                 await query.edit_message_text(text=f"Task {current_user_task_id} has been successfully deleted.")
-    #             else:
-    #                 await query.edit_message_text(text="Failed to delete the task. It might have already been deleted.")
-    #         except Exception as e:
-    #             await query.edit_message_text(text=f"An error occurred: {str(e)}")
-    #     elif data[0] == "cancel":
-    #         await query.edit_message_text(text="Task deletion cancelled.")
 
     async def status_task_command(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
@@ -454,7 +367,6 @@ class TelegramBot:
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 
-    # Updated set_due_date_command in capstone2.py
     async def set_due_date_command(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
         if len(context.args) == 0:
@@ -496,7 +408,6 @@ class TelegramBot:
         # Call or write a function to display the calendar here
         await self.prompt_calendar_for_due_date(update, context)
 
-    # Updated handle_year_selection function in capstone2.py
     async def handle_year_selection(self, update: Update, context: CallbackContext):
         query = update.callback_query
         await query.answer()
@@ -504,7 +415,6 @@ class TelegramBot:
         context.user_data['selected_year'] = selected_year
         await self.handle_early_half_year_selection(update, context)
 
-    # Updated handle_early_half_year_selection function in capstone2.py
     async def handle_early_half_year_selection(self, update: Update, context: CallbackContext):
         query = update.callback_query
         await query.answer()
@@ -518,7 +428,6 @@ class TelegramBot:
             reply_markup=InlineKeyboardMarkup(month_buttons)
         )
 
-    # Updated handle_late_half_year_selection function in capstone2.py
     async def handle_late_half_year_selection(self, update: Update, context: CallbackContext):
         query = update.callback_query
         await query.answer()
@@ -534,7 +443,6 @@ class TelegramBot:
             reply_markup=InlineKeyboardMarkup(month_buttons)
         )
 
-    # Updated handle_month_selection function in capstone2.py
     async def handle_month_selection(self, update: Update, context: CallbackContext):
         query = update.callback_query
         await query.answer()
@@ -559,7 +467,6 @@ class TelegramBot:
             reply_markup=InlineKeyboardMarkup(grid_buttons)
         )
 
-    # Updated handle_day_selection function in capstone2.py
     async def handle_day_selection(self, update: Update, context: CallbackContext):
         query = update.callback_query
         await query.answer()
@@ -594,12 +501,10 @@ class TelegramBot:
         else:
             await query.message.reply_text("Invalid day selection.")
 
-    # No changes needed for prompt_calendar_for_due_date in capstone2.py
     async def prompt_calendar_for_due_date(self, update: Update, context: CallbackContext):
         buttons = [[InlineKeyboardButton(str(year), callback_data=f"year_{year}")] for year in range(datetime.now().year, datetime.now().year + 5)]
         await update.message.reply_text("Please choose a year:", reply_markup=InlineKeyboardMarkup(buttons))
 
-    # Updated set_due_time_command in capstone2.py
     async def set_due_time_command(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
         if len(context.args) == 0:
@@ -617,14 +522,6 @@ class TelegramBot:
 
         context.user_data['current_user_task_id_for_due_time'] = current_user_task_id
 
-        # # Organize hours into two rows: 1-6 and 7-12
-        # buttons = [
-        #     [InlineKeyboardButton(f"{i:02d}", callback_data=f"hour_{i:02d}") for i in range(1, 7)],
-        #     [InlineKeyboardButton(f"{i:02d}", callback_data=f"hour_{i:02d}") for i in range(7, 13)]
-        # ]
-        # await update.message.reply_text("Please choose an hour:", reply_markup=InlineKeyboardMarkup(buttons))
-
-        # Organize hours into more rows for a full day: 0-23
         buttons = [
             [InlineKeyboardButton(f"{i:02d}", callback_data=f"hour_{i:02d}") for i in range(0, 6)],
             [InlineKeyboardButton(f"{i:02d}", callback_data=f"hour_{i:02d}") for i in range(6, 12)],
@@ -633,7 +530,6 @@ class TelegramBot:
         ]
         await update.message.reply_text("Please choose an hour:", reply_markup=InlineKeyboardMarkup(buttons))
 
-    # Updated handle_hour_selection in capstone2.py
     async def handle_hour_selection(self, update: Update, context: CallbackContext):
         query = update.callback_query
         await query.answer()
@@ -649,7 +545,6 @@ class TelegramBot:
         keyboard_layout = [minute_buttons[i:i + 6] for i in range(0, len(minute_buttons), 6)]
         await query.edit_message_text(text="Please choose minutes:", reply_markup=InlineKeyboardMarkup(keyboard_layout))
 
-    # Updated handle_minute_selection in capstone2.py
     async def handle_minute_selection(self, update: Update, context: CallbackContext):
         query = update.callback_query
         if query:
@@ -674,57 +569,6 @@ class TelegramBot:
             await query.message.reply_text(f"Due time set to {time_str} for task ID {current_user_task_id}.")
         else:
             await query.message.reply_text("Failed to set due time. Please try again.")
-
-    # # Handle period selection
-    # async def handle_period_selection(self, update: Update, context: CallbackContext):
-    #     query = update.callback_query
-    #     if query:
-    #         await query.answer()
-
-    #     period = query.data.split('_')[1]
-    #     hour = context.user_data['selected_hour']
-    #     if period == "PM" and hour != 12:
-    #         hour += 12
-    #     elif period == "AM" and hour == 12:
-    #         hour = 0
-    #     minute = context.user_data['selected_minute']
-
-    #     time_str = f"{hour:02d}:{minute:02d}:00"
-    #     user_id = query.from_user.id
-    #     current_user_task_id = context.user_data['current_user_task_id_for_due_time']
-
-    #     task_details = self.db.get_task_details(user_id, current_user_task_id)
-    #     if not task_details or task_details['is_deleted']:
-    #         await query.message.reply_text("This task has been deleted and cannot be modified.")
-    #         return
-
-    #     if self.db.set_task_due_time(user_id, current_user_task_id, time_str):
-    #         await query.message.reply_text(f"Due time set for task ID {current_user_task_id}.")
-    #     else:
-    #         await query.message.reply_text("Failed to set due time. Please try again.")
-
-    # # new code added 10 July 2024 - search
-    # async def search_tasks_command(self, update: Update, context: CallbackContext):
-    #     if not context.args:
-    #         await update.message.reply_text("Please provide a search term. Usage: /search [keywords|date: YYYY-MM-DD|time: HH]")
-    #         return
-
-    #     search_term = ' '.join(context.args).lower()  # Combines all arguments into a single string and makes it lowercase
-    #     search_type, search_value = self.parse_search_query(search_term)  # Correct call to the function
-    #     user_id = update.message.from_user.id
-    #     matching_tasks = self.db.search_tasks(user_id, search_type, search_value)  # Assuming this function is correctly implemented
-
-    #     if not matching_tasks:
-    #         await update.message.reply_text("No tasks found matching your criteria.")
-    #         return
-
-    #     response_text = "Here are the tasks matching your search:\n\n"
-    #     response_text += "\n".join(
-    #         f"{task['current_user_task_id']}. {task['description']} (Status: {task['status']}, Date: {task['due_date']})"
-    #         for task in matching_tasks
-    #     )
-
-    #     await update.message.reply_text(response_text)
 
     async def search_full_task_details_command(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
@@ -758,7 +602,6 @@ class TelegramBot:
         )
         await update.message.reply_text(response_text)
 
-    # new code for reminder 10 july 2024
     async def set_reminder_command(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
         tasks = self.db.list_tasks_for_reminders(user_id)
@@ -772,36 +615,6 @@ class TelegramBot:
         ]
         reply_markup = InlineKeyboardMarkup(buttons)
         await update.message.reply_text("Select a task to set a reminder:", reply_markup=reply_markup)
-
-    # async def handle_set_reminder(self, update: Update, context: CallbackContext):
-    #     query = update.callback_query
-    #     await query.answer()
-
-    #     task_id = int(query.data.split('_')[2])
-    #     task_details = self.db.get_current_user_task_id_from_tasks(task_id)
-        
-    #     if not task_details:
-    #         await query.edit_message_text(text="Task details could not be fetched.")
-    #         return
-
-    #     context.user_data['selected_task_id_for_reminder'] = task_id
-    #     context.user_data['current_user_task_id_for_reminder'] = task_details.get('current_user_task_id')
-
-    #     if context.user_data['current_user_task_id_for_reminder'] is None:
-    #         await query.edit_message_text(text="No current user task ID available for this task.")
-    #         return
-
-    #     buttons = [
-    #         [InlineKeyboardButton("5 minutes before", callback_data="reminder_time_5_minutes")],
-    #         [InlineKeyboardButton("10 minutes before", callback_data="reminder_time_10_minutes")],
-    #         [InlineKeyboardButton("15 minutes before", callback_data="reminder_time_15_minutes")],
-    #         [InlineKeyboardButton("30 minutes before", callback_data="reminder_time_30_minutes")],
-    #         [InlineKeyboardButton("1 hour before", callback_data="reminder_time_60_minutes")],
-    #         [InlineKeyboardButton("1 day before", callback_data="reminder_time_1440_minutes")],
-    #         [InlineKeyboardButton("Custom...", callback_data="reminder_time_custom")]
-    #     ]
-    #     reply_markup = InlineKeyboardMarkup(buttons)
-    #     await query.edit_message_text(text="Select a reminder time:", reply_markup=reply_markup)
 
     async def handle_set_reminder(self, update: Update, context: CallbackContext):
         query = update.callback_query
@@ -850,85 +663,6 @@ class TelegramBot:
 
         # Remove the reminder selection buttons
         await query.message.delete()
-
-    # async def handle_reminder_time_selection(self, update: Update, context: CallbackContext):
-    #     query = update.callback_query
-    #     await query.answer()
-
-    #     data = query.data.split('_')
-    #     if data[2] == 'custom':
-    #         # If the user selects custom, handle that separately
-    #         await query.edit_message_text(text="Enter custom reminder time in the format: 'X minutes/hours/days/weeks before'")
-    #         context.user_data['awaiting_custom_reminder_input'] = True
-    #     else:
-    #         reminder_time_minutes = int(data[2])
-    #         task_id = context.user_data['selected_task_id_for_reminder']
-    #         current_user_task_id = context.user_data['current_user_task_id_for_reminder']
-    #         user_id = query.from_user.id
-
-    #         # Assuming add_reminder method also takes current_user_task_id now
-    #         self.db.add_reminder(user_id, task_id, reminder_time_minutes, current_user_task_id)
-            
-    #         # Send a new message for confirmation
-    #         await update.effective_chat.send_message(
-    #         text=f"Reminder set for Task ID: {task_id} — 30 minutes before the due time."
-    #         )
-
-    # async def handle_reminder_time_selection(self, update: Update, context: CallbackContext):
-    #     query = update.callback_query
-    #     await query.answer()
-
-    #     data = query.data.split('_')
-    #     task_id = context.user_data['selected_task_id_for_reminder']
-    #     current_user_task_id = context.user_data['current_user_task_id_for_reminder']
-    #     user_id = query.from_user.id
-
-    #     if data[2] == 'custom':
-    #         await query.edit_message_text(text="Enter custom reminder time in the format: 'X minutes/hours/days/weeks before'")
-    #         context.user_data['awaiting_custom_reminder_input'] = True
-    #     else:
-    #         reminder_time_minutes = int(data[2])
-
-    #         # Fetch the due date and due time from tasks table
-    #         task_details = self.db.get_task_details_by_current_user_task_id(user_id, current_user_task_id)
-
-    #         if task_details is None:
-    #             await query.message.reply_text("Task details could not be fetched.")
-    #             return
-
-    #         due_date = task_details['due_date']
-    #         due_time = task_details['due_time']
-
-    #         # Fetch the updated_on time from reminders table if due_time is not set
-    #         if due_time is None:
-    #             reminder_record = self.db.get_reminder_updated_on(user_id, task_id)
-    #             if reminder_record is None:
-    #                 # Use current time if no reminder exists yet
-    #                 updated_on = datetime.now()
-    #             else:
-    #                 updated_on = reminder_record['updated_on']
-    #             due_time = updated_on.time()  # Use updated_on time as due_time if due_time is not set
-
-    #         # If still no due time, set a default time (e.g., 23:59)
-    #         if due_time is None:
-    #             due_time = time(23, 59)
-
-    #         # Combine due_date and due_time to form the complete due datetime
-    #         due_datetime = datetime.combine(due_date, due_time)
-
-    #         # Calculate reminder time
-    #         reminder_time = due_datetime - timedelta(minutes=reminder_time_minutes)
-
-    #         # Update the reminder in the database
-    #         self.db.add_reminder(user_id, task_id, reminder_time, current_user_task_id)
-
-    #         # Send confirmation message with the reminder time
-    #         reminder_time_formatted = reminder_time.strftime('%Y-%m-%d %H:%M:%S')
-    #         await query.message.delete()
-    #         await context.bot.send_message(
-    #             chat_id=user_id,
-    #             text=f"Reminder set for task ID {task_id}, {reminder_time_minutes} minutes before the due time.\nThe reminder will be sent at: {reminder_time_formatted}"
-    #         )
 
     async def handle_reminder_time_selection(self, update: Update, context: CallbackContext):
         query = update.callback_query
@@ -1065,45 +799,6 @@ class TelegramBot:
         # Sleep for a short duration to prevent overlapping instances
         await asyncio.sleep(1)
 
-    # async def handle_message(self, update, context):
-    #     if 'awaiting_time_input' in context.user_data and context.user_data['awaiting_time_input']:
-    #         time_input = update.message.text
-    #         try:
-    #             # Example for absolute time
-    #             reminder_time = datetime.strptime(time_input, "%H:%M %Y-%m-%d")
-    #             task_id = context.user_data['selected_task_id_for_reminder']
-    #             user_id = update.message.from_user.id
-    #             if self.db.add_reminder(user_id, task_id, reminder_time):
-    #                 await update.message.reply_text("Reminder set successfully for {reminder_time.strftime('%H:%M on %Y-%m-%d')}.")
-    #             else:
-    #                 await update.message.reply_text("Failed to set reminder. Please try again.")
-    #             context.user_data['awaiting_time_input'] = False  # Reset the flag
-    #         except ValueError:
-    #             await update.message.reply_text("Invalid time format. Please use HH:MM YYYY-MM-DD format.")
-
-    # def check_reminders(self):
-    #     # This function will fetch upcoming reminders and schedule them
-    #     reminders = self.db.get_upcoming_reminders()
-    #     for reminder in reminders:
-    #         self.schedule_reminder(reminder['user_id'], reminder['task_id'], reminder['reminder_time'])
-
-    # def schedule_reminder(self, user_id, task_id, reminder_time):
-    #     # Schedule a single reminder
-    #     self.scheduler.add_job(
-    #         self.send_reminder, 
-    #         trigger=DateTrigger(run_date=reminder_time), 
-    #         args=[user_id, task_id]
-    #     )
-
-    # async def send_reminder(self, user_id, task_id):
-    #     task = self.db.get_task(user_id, task_id)
-    #     if task:
-    #         message = f"Reminder: Your task '{task['description']}' is due soon!"
-    #         await self.application.bot.send_message(chat_id=user_id, text=message)
-    #         self.db.mark_reminder_as_sent(task['id'])
-
-
-
     def handle_response(self, text: str) -> str:
         processed: str = text.lower()
         if 'hello' in processed:
@@ -1135,11 +830,6 @@ class TelegramBot:
     async def error(self, update: Update, context: CallbackContext):
         print(f'Update {update} caused error {context.error}')
 
-
-    # async def run_reminder_checker(self):
-    #     loop = asyncio.get_event_loop()
-    #     loop.create_task(self.check_and_send_reminders())
-
     def shutdown(self, signum, frame):
         print("Shutting down...")
         if self.reminder_task:
@@ -1163,7 +853,6 @@ class TelegramBot:
         self.application.add_handler(CommandHandler('create', self.create_task_command))
         self.application.add_handler(CommandHandler('list', self.list_tasks_command))
         self.application.add_handler(CommandHandler('delete', self.delete_task_command))
-        # bot.application.add_handler(CallbackQueryHandler(bot.handle_task_deletion_confirmation, pattern='^(confirm_delete|cancel_delete)_'))
         self.application.add_handler(CommandHandler('status', self.status_task_command))
         self.application.add_handler(conv_handler)
         self.application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_message))
@@ -1173,14 +862,8 @@ class TelegramBot:
         self.application.add_handler(CommandHandler('set_due_date', self.set_due_date_command))
         self.application.add_handler(CallbackQueryHandler(self.handle_year_selection, pattern='^year_\d+$'))
         self.application.add_handler(CallbackQueryHandler(self.handle_due_date_selection, pattern='^due_\d+$'))
-
-        # Handle month selection by number
         self.application.add_handler(CallbackQueryHandler(self.handle_month_selection, pattern='^month_[A-Za-z]+$'))
-
         self.application.add_handler(CallbackQueryHandler(self.handle_day_selection, pattern='^day_\d+$'))
-        # self.application.add_handler(CallbackQueryHandler(self.toggle_view, pattern='^toggle_details$'))
-
-        # Specific month handlers for the calendar
         self.application.add_handler(CallbackQueryHandler(self.handle_early_half_year_selection, pattern='^next_months$'))
         self.application.add_handler(CallbackQueryHandler(self.handle_late_half_year_selection, pattern='^previous_months$'))
 
@@ -1194,7 +877,6 @@ class TelegramBot:
         self.application.add_handler(CommandHandler('set_due_time', self.set_due_time_command))
         self.application.add_handler(CallbackQueryHandler(self.handle_hour_selection, pattern='^hour_\\d{2}$'))
         self.application.add_handler(CallbackQueryHandler(self.handle_minute_selection, pattern='^minute_'))
-        # self.application.add_handler(CallbackQueryHandler(self.handle_period_selection, pattern="^period_"))
 
         #search 
         self.application.add_handler(CommandHandler('search', self.search_tasks_command))
@@ -1205,10 +887,7 @@ class TelegramBot:
         self.application.add_handler(CallbackQueryHandler(self.handle_set_reminder, pattern='^set_reminder_'))
         self.application.add_handler(CallbackQueryHandler(self.handle_reminder_time_selection, pattern='^reminder_time_'))
         self.application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_message))
-        # Schedule the reminder checker to run every 30 seconds
         self.scheduler.add_job(self.check_and_send_reminders, IntervalTrigger(seconds=10), max_instances=1)
-        # self.application.add_handler(CallbackQueryHandler(self.update_task_status, pattern='^update_status_'))
-        # self.application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_message))
 
         print('Polling...')
         self.application.run_polling()
@@ -1216,7 +895,3 @@ class TelegramBot:
 if __name__ == '__main__':
     bot = TelegramBot(TOKEN, BOT_USERNAME)
     bot.run()
-
-
-
-    

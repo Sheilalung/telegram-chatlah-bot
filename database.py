@@ -91,21 +91,6 @@ class Database:
         finally:
             cursor.close()
 
-    # def update_task_status(self, user_id, user_task_id, status):
-    #     self.verify_connection()
-    #     cursor = self.connection.cursor()
-    #     try:
-    #         sql = "UPDATE tasks SET status = %s WHERE user_id = %s AND user_task_id = %s"
-    #         cursor.execute(sql, (status, user_id, user_task_id))
-    #         self.connection.commit()
-    #         print(f"Rows affected: {cursor.rowcount}")  # Debugging output
-    #         return cursor.rowcount > 0
-    #     except mysql.connector.Error as err:
-    #         print(f"Error updating task status: {err}")
-    #         return False
-    #     finally:
-    #         cursor.close()
-
     def update_task_status(self, user_id, current_user_task_id, status):
         self.verify_connection()
         cursor = self.connection.cursor()
@@ -161,70 +146,6 @@ class Database:
         finally:
             cursor.close()
 
-    # def delete_task(self, user_id, user_task_id):
-    #     self.verify_connection()
-    #     cursor = self.connection.cursor()
-    #     try:
-    #         # Mark the task as deleted
-    #         sql = "UPDATE tasks SET is_deleted = TRUE WHERE user_id = %s AND user_task_id = %s"
-    #         cursor.execute(sql, (user_id, user_task_id))
-    #         self.connection.commit()
-
-    #         # Reorder remaining tasks to update current_user_task_id
-    #         sql = "SELECT id FROM tasks WHERE user_id = %s AND is_deleted = 0 ORDER BY user_task_id"
-    #         cursor.execute(sql, (user_id,))
-    #         remaining_tasks = cursor.fetchall()
-
-    #         for index, task in enumerate(remaining_tasks):
-    #             current_task_id = index + 1
-    #             sql_update = "UPDATE tasks SET current_user_task_id = %s WHERE id = %s"
-    #             cursor.execute(sql_update, (current_task_id, task[0]))
-            
-    #         self.connection.commit()
-    #         return cursor.rowcount > 0
-    #     finally:
-    #         cursor.close()
-
-    # # code the true for current user task id 9 july 2024
-    # def delete_task(self, user_id, user_task_id):
-    #     self.verify_connection()
-    #     cursor = self.connection.cursor()
-    #     try:
-    #         self.connection.start_transaction()
-
-    #         # Mark the task as deleted and reset the current_user_task_id
-    #         sql = """
-    #         UPDATE tasks 
-    #         SET is_deleted = 1, current_user_task_id = NULL
-    #         WHERE user_id = %s AND user_task_id = %s;
-    #         """
-    #         cursor.execute(sql, (user_id, user_task_id))
-
-    #         # Check if the task was successfully marked as deleted
-    #         if cursor.rowcount == 0:
-    #             print("No task was marked as deleted; check user_task_id and user_id.")
-    #             self.connection.rollback()
-    #             return False
-
-    #         # Re-index current_user_task_id for the remaining tasks
-    #         cursor.execute("SET @rownum := 0;")
-    #         sql = """
-    #         UPDATE tasks 
-    #         SET current_user_task_id = (@rownum := @rownum + 1)
-    #         WHERE user_id = %s AND is_deleted = 0
-    #         ORDER BY user_task_id;
-    #         """
-    #         cursor.execute(sql, (user_id,))
-
-    #         self.connection.commit()
-    #         return True
-    #     except mysql.connector.Error as err:
-    #         print(f"Error while deleting/updating task: {err}")
-    #         self.connection.rollback()
-    #         return False
-    #     finally:
-    #         cursor.close()
-
     def delete_task(self, user_id, current_user_task_id):
         self.verify_connection()
         cursor = self.connection.cursor()
@@ -267,46 +188,6 @@ class Database:
             return False
         finally:
             cursor.close()
-
-    # code can't use for doble confirm delete task
-    # def delete_task(self, user_id, user_task_id):
-    #     self.verify_connection()
-    #     cursor = self.connection.cursor()
-    #     try:
-    #         self.connection.start_transaction()
-    #         cursor.execute("SELECT is_deleted FROM tasks WHERE user_id = %s AND user_task_id = %s", (user_id, user_task_id))
-    #         task = cursor.fetchone()
-    #         if not task:
-    #             print("Task does not exist.")
-    #             self.connection.rollback()
-    #             return False
-    #         if task[0] == 1:
-    #             print("Task already marked as deleted.")
-    #             self.connection.rollback()
-    #             return False
-
-    #         cursor.execute("""
-    #             UPDATE tasks SET is_deleted = 1, current_user_task_id = NULL
-    #             WHERE user_id = %s AND user_task_id = %s
-    #         """, (user_id, user_task_id))
-    #         if cursor.rowcount == 0:
-    #             print("No task was marked as deleted; check user_task_id and user_id.")
-    #             self.connection.rollback()
-    #             return False
-            
-    #         cursor.execute("SET @rownum := 0;")
-    #         cursor.execute("""
-    #             UPDATE tasks SET current_user_task_id = (@rownum := @rownum + 1)
-    #             WHERE user_id = %s AND is_deleted = 0 ORDER BY user_task_id
-    #         """, (user_id,))
-    #         self.connection.commit()
-    #         return True
-    #     except mysql.connector.Error as err:
-    #         print(f"Error while deleting/updating task: {err}")
-    #         self.connection.rollback()
-    #         return False
-    #     finally:
-    #         cursor.close()
 
     def set_task_due_date(self, user_id, current_user_task_id, due_date):
         self.verify_connection()
@@ -451,27 +332,6 @@ class Database:
         finally:
             cursor.close()
 
-    # def get_task_details_by_current_user_task_id(self, user_id, current_user_task_id):
-    #     self.verify_connection()
-    #     cursor = self.connection.cursor()
-    #     try:
-    #         cursor.execute(
-    #             "SELECT description, is_deleted, due_date, due_time FROM tasks WHERE user_id = %s AND current_user_task_id = %s",
-    #             (user_id, current_user_task_id)
-    #         )
-    #         result = cursor.fetchone()
-    #         if result:
-    #             return {
-    #                 'description': result[0],
-    #                 'is_deleted': bool(result[1]),
-    #                 'due_date': result[2],
-    #                 'due_time': result[3],
-    #                 'current_user_task_id': current_user_task_id
-    #             }
-    #         return None
-    #     finally:
-    #         cursor.close()
-
     # Update the get_task_details_by_current_user_task_id method to fetch the updated_on timestamp
     def get_task_details_by_current_user_task_id(self, user_id, current_user_task_id):
         self.verify_connection()
@@ -581,38 +441,6 @@ class Database:
         finally:
             cursor.close()
 
-    # def get_upcoming_reminders(self):
-    #     self.verify_connection()
-    #     cursor = self.connection.cursor(dictionary=True)
-    #     try:
-    #         sql = "SELECT * FROM reminders WHERE reminded = FALSE AND reminder_time <= NOW()"
-    #         cursor.execute(sql)
-    #         return cursor.fetchall()
-    #     finally:
-    #         cursor.close()
-
-    # def mark_reminder_as_sent(self, reminder_id):
-    #     self.verify_connection()
-    #     cursor = self.connection.cursor()
-    #     try:
-    #         sql = "UPDATE reminders SET reminded = TRUE WHERE id = %s"
-    #         cursor.execute(sql, (reminder_id,))
-    #         self.connection.commit()
-    #     finally:
-    #         cursor.close()
-
-    # def list_tasks_for_reminders(self, user_id):
-    #     self.verify_connection()
-    #     cursor = self.connection.cursor(dictionary=True)  # Ensure results are returned as dictionaries
-    #     try:
-    #         # Fetch only active tasks with a due date and due time set
-    #         sql = "SELECT current_user_task_id, description, status, due_date, due_time FROM tasks WHERE user_id = %s AND is_deleted = 0 ORDER BY current_user_task_id"
-    #         cursor.execute(sql, (user_id,))
-    #         tasks = cursor.fetchall()
-    #         return tasks
-    #     finally:
-    #         cursor.close()
-
     def list_tasks_for_reminders(self, user_id):
         self.verify_connection()
         cursor = self.connection.cursor(dictionary=True)
@@ -624,26 +452,6 @@ class Database:
             return tasks
         finally:
             cursor.close()
-
-    # def add_reminder(self, user_id, task_id, reminder_time, current_user_task_id):
-    #     self.verify_connection()
-    #     cursor = self.connection.cursor()
-    #     try:
-    #         # SQL command that either inserts a new record or updates the existing one
-    #         sql = """
-    #         INSERT INTO reminders (user_id, task_id, reminder_time, current_user_task_id, reminded)
-    #         VALUES (%s, %s, %s, %s, 0)
-    #         ON DUPLICATE KEY UPDATE
-    #         reminder_time = VALUES(reminder_time), current_user_task_id = VALUES(current_user_task_id), updated_on = NOW();
-    #         """
-    #         cursor.execute(sql, (user_id, task_id, reminder_time, current_user_task_id))
-    #         self.connection.commit()
-    #         print(f"Reminder added or updated for task_id: {task_id}, user_id: {user_id}")
-    #     except mysql.connector.Error as error:
-    #         print(f"Failed to add or update reminder: {error}")
-    #         self.connection.rollback()
-    #     finally:
-    #         cursor.close()
 
     def add_reminder(self, user_id, task_id, reminder_date, reminder_time, current_user_task_id):
         self.verify_connection()
@@ -661,7 +469,7 @@ class Database:
             current_user_task_id = VALUES(current_user_task_id),
             reminded = 0
             """
-            print(f"Executing SQL: {sql_insert} {sql_update}")
+            # print(f"Executing SQL: {sql_insert} {sql_update}")
             print(f"With values: {user_id}, {task_id}, {reminder_date}, {reminder_time}, {current_user_task_id}")
             # Execute the SQL command
             cursor.execute(sql_insert + sql_update, (user_id, task_id, reminder_date, reminder_time, current_user_task_id))
@@ -674,7 +482,6 @@ class Database:
         finally:
             cursor.close()
 
-    # Add the method to fetch reminder updated_on time from reminders table
     def get_reminder_updated_on(self, user_id, task_id):
         self.verify_connection()
         cursor = self.connection.cursor(dictionary=True)
@@ -722,3 +529,4 @@ class Database:
             self.connection.commit()
         finally:
             cursor.close()
+            
