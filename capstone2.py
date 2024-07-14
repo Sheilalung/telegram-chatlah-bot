@@ -120,7 +120,8 @@ class TelegramBot:
     - /status [task_id]: Update the status of a specific task.
     - /set_due_date [task_id]: Set the due date for a specific task.
     - /set_due_time [task_id]: Set the due time for a specific task.
-    - /search [keywords]: Search tasks by keywords in the description, status, date, or time. 
+    - /search [keywords]: Search tasks by keywords in the description.
+    - /search_full_details: Show the full details for the  task. 
     - /remind [task_id]: Set a reminder for a specific task.
     """
         await update.message.reply_text(help_text)
@@ -132,7 +133,7 @@ class TelegramBot:
         user_id = update.message.from_user.id
         description = ' '.join(context.args) if context.args else None
         if not description:
-            await update.message.reply_text("Please provide a task description.")
+            await update.message.reply_text("Please provide a task description. E.g., /create Finish task")
             return
 
         task_id = self.db.create_task(user_id, description)
