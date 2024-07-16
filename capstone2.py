@@ -67,7 +67,14 @@ class TelegramBot:
             print(e)
             raise
 
+    # async def start_command(self, update: Update, context: CallbackContext):
+    #     await update.message.reply_text('Hello! Thanks for choosing me as your buddy, and feel free to chat with me as I am ChatLah!')
+    
     async def start_command(self, update: Update, context: CallbackContext):
+        user_id = update.message.from_user.id
+        user_name = update.message.from_user.username
+
+        self.db.save_user(user_id, user_name)
         await update.message.reply_text('Hello! Thanks for choosing me as your buddy, and feel free to chat with me as I am ChatLah!')
 
     def convert_string_to_time(time_str):

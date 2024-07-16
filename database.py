@@ -529,4 +529,14 @@ class Database:
             self.connection.commit()
         finally:
             cursor.close()
+
+    def save_user(self, user_id, user_name):
+        self.verify_connection()
+        cursor = self.connection.cursor()
+        try:
+            sql = "INSERT INTO users (user_id, user_name) VALUES (%s, %s) ON DUPLICATE KEY UPDATE user_name = %s"
+            cursor.execute(sql, (user_id, user_name, user_name))
+            self.connection.commit()
+        finally:
+            cursor.close()
             
