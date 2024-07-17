@@ -29,7 +29,15 @@ import sys
 TOKEN: Final = '6729973842:AAH8XIUZ_fMl1WdAlkdGnD1zOlyyZmC0ZCI'
 BOT_USERNAME: Final = '@chat_lah_bot'
 MAX_RETRIES = 3  # Maximum number of retries
-WAITING_FOR_DESCRIPTION = 1
+
+WAITING_FOR_TASK_TITLE = 1
+WAITING_FOR_DESCRIPTION = 2
+WAITING_FOR_ACTUAL_DESCRIPTION = 3
+WAITING_FOR_SEARCH_TERM = 4
+WAITING_FOR_TASK_ID_TO_DELETE = 5
+WAITING_FOR_TASK_ID_TO_EDIT = 6
+WAITING_FOR_NEW_TASK_TITLE = 7
+WAITING_FOR_NEW_DESCRIPTION = 8
 
 class TelegramBot:
     def __init__(self, token, bot_username):
@@ -66,9 +74,6 @@ class TelegramBot:
         except ConnectionError as e:
             print(e)
             raise
-
-    # async def start_command(self, update: Update, context: CallbackContext):
-    #     await update.message.reply_text('Hello! Thanks for choosing me as your buddy, and feel free to chat with me as I am ChatLah!')
     
     async def start_command(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
@@ -103,14 +108,15 @@ class TelegramBot:
 
     - /start: Start interacting with me.
     - /help: Display this help message.
-    - /create [description]: Create a new task with a description.
+    - /create [description]: Create a new task with description.
+    - /edit [task_id]: Edit the title and description of a task.
     - /list: List all your current tasks.
     - /delete [task_id]: Delete a specific task.
     - /status [task_id]: Update the status of a specific task.
     - /set_due_date [task_id]: Set the due date for a specific task.
     - /set_due_time [task_id]: Set the due time for a specific task.
-    - /search [keywords]: Search tasks by keywords in the description.
-    - /search_full_details: Show the full details for the  task. 
+    - /search [keywords]: Search tasks by keywords.
+    - /search_full_details: Show the full details for the task. 
     - /remind [task_id]: Set a reminder for a specific task.
     """
         await update.message.reply_text(help_text)
@@ -119,33 +125,128 @@ class TelegramBot:
         await update.message.reply_text('This is custom command!')
 
     async def create_task_command(self, update: Update, context: CallbackContext):
-        user_id = update.message.from_user.id
-        description = ' '.join(context.args) if context.args else None
-        if not description:
-            await update.message.reply_text("Please provide a task description. E.g., /create Finish task")
-            return
+        await update.message.reply_text("Please provide a task title:")
+        return WAITING_FOR_TASK_TITLE
 
-        task_id = self.db.create_task(user_id, description)
-        if task_id:
-            print(f"Task {task_id} created successfully.")
-            await update.message.reply_text(f"Task created: {description}")
-        else:
-            print("Failed to create task due to database error.")
-            await update.message.reply_text("Failed to create task. Please try again.")
-
-    async def process_task_description(self, update: Update, context: CallbackContext, description: str):
+    async def handle_task_title(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
-        print(f"Creating task for user {user_id} with description '{description}'")  # Debugging output
-        task_id = self.db.create_task(user_id, description)
+        task_title = update.message.text
+        context.user_data['task_title'] = task_title
+        await update.message.reply_text("Do you want to provide a description for the task? If yes, please type the description. If no, type 'No'.")
+        return WAITING_FOR_DESCRIPTION
+
+    async def handle_description(self, update: Update, context: CallbackContext):
+        user_id = update.message.from_user.id
+        task_title = context.user_data.get('task_title')
+        description = update.message.text
+
+        if description.lower() == 'no':
+            task_id = self.db.create_task(user_id, task_title, None)
+            if task_id:
+                await update.message.reply_text(f"Task '{task_title}' created successfully.")
+            else:
+                await update.message.reply_text("Failed to create task. Please try again.")
+            return ConversationHandler.END
+
+        elif description.lower() == 'yes':
+            await update.message.reply_text("Please provide the description for the task:")
+            return WAITING_FOR_ACTUAL_DESCRIPTION
+        
+    async def handle_actual_description(self, update: Update, context: CallbackContext):
+        user_id = update.message.from_user.id
+        task_title = context.user_data.get('task_title')
+        description = update.message.text
+
+        task_id = self.db.create_task(user_id, task_title, description)
         if task_id:
-            await update.message.reply_text(f"Task created: {description} (ID: {task_id})")
+            await update.message.reply_text(f"Task '{task_title}' created successfully with description '{description}'.")
         else:
             await update.message.reply_text("Failed to create task. Please try again.")
         return ConversationHandler.END
+    
+    async def edit_task_command(self, update: Update, context: CallbackContext):
+        user_id = update.message.from_user.id
+        tasks = self.db.list_tasks(user_id)
+        if not tasks:
+            await update.message.reply_text("You have no tasks to edit.")
+            return ConversationHandler.END
 
-    async def handle_description(self, update: Update, context: CallbackContext):
-        description = update.message.text
-        await self.process_task_description(update, context, description)
+        buttons = [
+            [InlineKeyboardButton(f"{task[0]}. {task[1]}", callback_data=f"edit_{task[0]}")]
+            for task in tasks
+        ]
+        reply_markup = InlineKeyboardMarkup(buttons)
+        await update.message.reply_text("Select a task to edit:", reply_markup=reply_markup)
+        return WAITING_FOR_TASK_ID_TO_EDIT
+
+    async def handle_task_selection_to_edit(self, update: Update, context: CallbackContext):
+        query = update.callback_query
+        await query.answer()
+
+        user_id = query.from_user.id
+        task_id = int(query.data.split('_')[1])  # Extract the task ID from the callback data
+        task_details = self.db.get_task_details(user_id, task_id)
+        
+        if not task_details:
+            await query.message.reply_text(text="Task details could not be fetched.")
+            return ConversationHandler.END
+
+        context.user_data['selected_task_id_to_edit'] = task_id
+        context.user_data['original_description'] = task_details['description']
+        try:
+            await query.message.delete()  # Delete the previous message
+        except Exception as e:
+            print(f"Error deleting message: {e}")
+        await query.message.reply_text(text="Please enter the new task title:")
+        return WAITING_FOR_NEW_TASK_TITLE
+
+    async def handle_new_task_title(self, update: Update, context: CallbackContext):
+        new_task_title = update.message.text
+        context.user_data['new_task_title'] = new_task_title
+        buttons = [
+            [InlineKeyboardButton("Yes", callback_data="edit_yes")],
+            [InlineKeyboardButton("No", callback_data="edit_no")]
+        ]
+        reply_markup = InlineKeyboardMarkup(buttons)
+        await update.message.reply_text("Do you want to update the task description?", reply_markup=reply_markup)
+        return WAITING_FOR_NEW_DESCRIPTION
+
+    async def handle_description_choice(self, update: Update, context: CallbackContext):
+        query = update.callback_query
+        await query.answer()
+        choice = query.data.split('_')[1]
+        
+        if choice == "yes":
+            try:
+                await query.message.delete()  # Delete the previous message
+            except Exception as e:
+                print(f"Error deleting message: {e}")
+            await query.message.reply_text(text="Please enter the new task description:")
+            return WAITING_FOR_ACTUAL_DESCRIPTION
+        else:
+            user_id = query.from_user.id
+            task_id = context.user_data['selected_task_id_to_edit']
+            new_task_title = context.user_data['new_task_title']
+            original_description = context.user_data['original_description']
+
+            success = self.db.update_task(user_id, task_id, new_task_title, original_description)
+            if success:
+                await query.message.reply_text(f"Task {task_id} updated successfully.")
+            else:
+                await query.message.reply_text("Failed to update task. Please try again.")
+            return ConversationHandler.END
+
+    async def handle_new_task_description(self, update: Update, context: CallbackContext):
+        user_id = update.message.from_user.id
+        task_id = context.user_data['selected_task_id_to_edit']
+        new_task_title = context.user_data['new_task_title']
+        new_description = update.message.text
+
+        success = self.db.update_task(user_id, task_id, new_task_title, new_description)
+        if success:
+            await update.message.reply_text(f"Task {task_id} updated successfully.")
+        else:
+            await update.message.reply_text("Failed to update task. Please try again.")
         return ConversationHandler.END
 
     async def list_tasks_command(self, message_or_update, context: CallbackContext):
@@ -164,12 +265,12 @@ class TelegramBot:
 
         # Define column widths
         id_width = 4
-        description_width = 30
+        title_width = 20  # Adjust the width as needed
         status_width = 12
         date_width = 10
         time_width = 8
 
-        headers = f"{'ID':<{id_width}} | {'Description':<{description_width}} | {'Status':<{status_width}}"
+        headers = f"{'ID':<{id_width}} | {'Title':<{title_width}} | {'Status':<{status_width}}"
         if detailed_view:
             headers += f" | {'Due Date':<{date_width}} | {'Due Time':<{time_width}}"
         separators = '-' * len(headers)
@@ -178,23 +279,23 @@ class TelegramBot:
 
         task_map = {}
         for idx, task in enumerate(tasks, 1):
-            task_id, description, status, due_date, due_time = task
+            task_id, task_title, description, status, due_date, due_time = task
             due_date_display = due_date.strftime('%Y-%m-%d') if due_date else "No Date"
             due_time_display = self.format_time_or_duration(due_time) if due_time else "No Time"
-            
-            wrapped_description = textwrap.wrap(description, width=description_width)
 
-            for i, desc_line in enumerate(wrapped_description):
+            wrapped_title = textwrap.wrap(task_title, width=title_width)
+
+            for i, title_line in enumerate(wrapped_title):
                 if i == 0:
-                    line = f"{idx:<{id_width}} | {desc_line:<{description_width}} | {status:<{status_width}}"
+                    line = f"{idx:<{id_width}} | {title_line:<{title_width}} | {status:<{status_width}}"
                     if detailed_view:
                         line += f" | {due_date_display:<{date_width}} | {due_time_display:<{time_width}}"
                 else:
-                    line = f"{'':<{id_width}} | {desc_line:<{description_width}} | {'':<{status_width}}"
+                    line = f"{'':<{id_width}} | {title_line:<{title_width}} | {'':<{status_width}}"
                     if detailed_view:
                         line += f" | {'':<{date_width}} | {'':<{time_width}}"
                 lines.append(line)
-            
+
             lines.append(separators)  # Separate each entry
             task_map[str(idx)] = task_id  # Map displayed ID to internal ID
 
@@ -224,37 +325,41 @@ class TelegramBot:
 
         # Define column widths
         id_width = 4
-        description_width = 30
-        status_width = 12
+        title_width = 15  # Adjust the width as needed
         date_width = 10
         time_width = 8
 
-        headers = f"{'ID':<{id_width}} | {'Description':<{description_width}} | {'Status':<{status_width}}"
         if context.user_data['detailed_view']:
-            headers += f" | {'Due Date':<{date_width}} | {'Due Time':<{time_width}}"
+            headers = f"{'ID':<{id_width}} | {'Title':<{title_width}} | {'Due Date':<{date_width}} | {'Due Time':<{time_width}}"
+        else:
+            status_width = 12
+            headers = f"{'ID':<{id_width}} | {'Title':<{title_width}} | {'Status':<{status_width}}"
+
         separators = '-' * len(headers)
 
         lines = [headers, separators]
 
         task_map = {}
         for idx, task in enumerate(tasks, 1):
-            task_id, description, status, due_date, due_time = task
+            task_id, task_title, description, status, due_date, due_time = task
             due_date_display = due_date.strftime('%Y-%m-%d') if due_date else "No Date"
             due_time_display = self.format_time_or_duration(due_time) if due_time else "No Time"
-            
-            wrapped_description = textwrap.wrap(description, width=description_width)
 
-            for i, desc_line in enumerate(wrapped_description):
+            wrapped_title = textwrap.wrap(task_title, width=title_width)
+
+            for i, title_line in enumerate(wrapped_title):
                 if i == 0:
-                    line = f"{idx:<{id_width}} | {desc_line:<{description_width}} | {status:<{status_width}}"
                     if context.user_data['detailed_view']:
-                        line += f" | {due_date_display:<{date_width}} | {due_time_display:<{time_width}}"
+                        line = f"{idx:<{id_width}} | {title_line:<{title_width}} | {due_date_display:<{date_width}} | {due_time_display:<{time_width}}"
+                    else:
+                        line = f"{idx:<{id_width}} | {title_line:<{title_width}} | {status:<{status_width}}"
                 else:
-                    line = f"{'':<{id_width}} | {desc_line:<{description_width}} | {'':<{status_width}}"
                     if context.user_data['detailed_view']:
-                        line += f" | {'':<{date_width}} | {'':<{time_width}}"
+                        line = f"{'':<{id_width}} | {title_line:<{title_width}} | {'':<{date_width}} | {'':<{time_width}}"
+                    else:
+                        line = f"{'':<{id_width}} | {title_line:<{title_width}} | {'':<{status_width}}"
                 lines.append(line)
-            
+
             lines.append(separators)  # Separate each entry
             task_map[str(idx)] = task_id  # Map displayed ID to internal ID
 
@@ -339,21 +444,22 @@ class TelegramBot:
             await query.message.reply_text("Failed to update task status. Please try again.")
 
     async def delete_task_command(self, update: Update, context: CallbackContext):
+        await update.message.reply_text("Please provide a task ID to delete:")
+        return WAITING_FOR_TASK_ID_TO_DELETE
+    
+    async def handle_task_id_to_delete(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
-        if len(context.args) == 0:
-            await update.message.reply_text("Please provide a task ID to delete. Usage: /delete [task_id]")
-            return
-
         try:
-            current_user_task_id = int(context.args[0])
+            current_user_task_id = int(update.message.text)
         except ValueError:
             await update.message.reply_text("Invalid task ID. Please provide a numeric task ID.")
-            return
+            return WAITING_FOR_TASK_ID_TO_DELETE
 
         if self.db.delete_task(user_id, current_user_task_id):
             await update.message.reply_text(f"Task {current_user_task_id} deleted.")
         else:
             await update.message.reply_text(f"Failed to delete task {current_user_task_id}.")
+        return ConversationHandler.END
 
     async def status_task_command(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
@@ -363,7 +469,7 @@ class TelegramBot:
             return
 
         buttons = [
-            [InlineKeyboardButton(f"{task[0]}. {task[1]} ({task[2]})", callback_data=f"status_{task[0]}")]
+            [InlineKeyboardButton(f"{task[0]}. {task[1]} ({task[3]})", callback_data=f"status_{task[0]}")]
             for task in tasks
         ]
         # Add a button for bulk update
@@ -585,29 +691,31 @@ class TelegramBot:
             return
 
         response_text = "Tasks with a due date:\n\n" + "\n".join(
-            f"{task['current_user_task_id']}. {task['description']} (Status: {task['status']}, Due Date: {task['due_date'].strftime('%Y-%m-%d')})"
+            f"{task['current_user_task_id']}. {task['task_title']} (Status: {task['status']}, Due Date: {task['due_date'].strftime('%Y-%m-%d')})"
             for task in tasks
         )
         await update.message.reply_text(response_text)
 
     async def search_tasks_command(self, update: Update, context: CallbackContext):
-        if not context.args:
-            await update.message.reply_text("Please provide a search term. Usage: /search [keywords]")
-            return
+        await update.message.reply_text("Please provide a search term:")
+        return WAITING_FOR_SEARCH_TERM
 
-        search_term = ' '.join(context.args).lower()  # Combines all arguments into a single string and makes it lowercase
+    # Add a new handler method for search term input
+    async def handle_search_term(self, update: Update, context: CallbackContext):
+        search_term = update.message.text.lower()
         user_id = update.message.from_user.id
-        matching_tasks = self.db.search_tasks_by_description(user_id, search_term)
+        matching_tasks = self.db.search_tasks(user_id, search_term)  # Use the updated method
 
         if not matching_tasks:
             await update.message.reply_text("No tasks found matching your criteria.")
-            return
+            return ConversationHandler.END
 
         response_text = "Here are the tasks matching your search:\n\n" + "\n".join(
-            f"{task['current_user_task_id']}. {task['description']} (Status: {task['status']})"
+            f"{task['current_user_task_id']}. {task['task_title']} (Description: {task['description']}, Status: {task['status']})"
             for task in matching_tasks
         )
         await update.message.reply_text(response_text)
+        return ConversationHandler.END
 
     async def set_reminder_command(self, update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
@@ -617,7 +725,7 @@ class TelegramBot:
             return
         
         buttons = [
-            [InlineKeyboardButton(f"{task['current_user_task_id']}. {task['description']}", callback_data=f"set_reminder_{task['current_user_task_id']}")]
+            [InlineKeyboardButton(f"{task['current_user_task_id']}. {task['task_title']}", callback_data=f"set_reminder_{task['current_user_task_id']}")]
             for task in tasks
         ]
         reply_markup = InlineKeyboardMarkup(buttons)
@@ -658,8 +766,7 @@ class TelegramBot:
             [InlineKeyboardButton("15 minutes before", callback_data="reminder_time_15_minutes")],
             [InlineKeyboardButton("30 minutes before", callback_data="reminder_time_30_minutes")],
             [InlineKeyboardButton("1 hour before", callback_data="reminder_time_60_minutes")],
-            [InlineKeyboardButton("1 day before", callback_data="reminder_time_1440_minutes")],
-            [InlineKeyboardButton("Custom...", callback_data="reminder_time_custom")]
+            [InlineKeyboardButton("1 day before", callback_data="reminder_time_1440_minutes")]
         ]
         reply_markup = InlineKeyboardMarkup(buttons)
 
@@ -680,59 +787,55 @@ class TelegramBot:
         current_user_task_id = context.user_data['current_user_task_id_for_reminder']
         user_id = query.from_user.id
 
-        if data[2] == 'custom':
-            await query.edit_message_text(text="Enter custom reminder time in the format: 'X minutes/hours/days/weeks before'")
-            context.user_data['awaiting_custom_reminder_input'] = True
-        else:
-            reminder_time_minutes = int(data[2])
+        reminder_time_minutes = int(data[2])
 
-            # Fetch the due date and due time from tasks table
-            task_details = self.db.get_current_user_task_id_from_tasks(user_id, current_user_task_id)
+        # Fetch the due date and due time from tasks table
+        task_details = self.db.get_current_user_task_id_from_tasks(user_id, current_user_task_id)
 
-            if task_details is None:
-                await query.message.reply_text("Task details could not be fetched.")
-                return
+        if task_details is None:
+            await query.message.reply_text("Task details could not be fetched.")
+            return
 
-            due_date = task_details['due_date']
-            due_time = task_details['due_time']
+        due_date = task_details['due_date']
+        due_time = task_details['due_time']
 
-            # Convert timedelta to time if necessary
-            if isinstance(due_time, timedelta):
-                due_time = (datetime.min + due_time).time()
+        # Convert timedelta to time if necessary
+        if isinstance(due_time, timedelta):
+            due_time = (datetime.min + due_time).time()
 
-            # Fetch the updated_on time from reminders table if due_time is not set
-            if due_time is None:
-                reminder_record = self.db.get_reminder_updated_on(user_id, task_id)
-                if reminder_record is None:
-                    # Use current time if no reminder exists yet
-                    updated_on = datetime.now()
-                else:
-                    updated_on = reminder_record['updated_on']
-                due_time = updated_on.time()  # Use updated_on time as due_time if due_time is not set
+        # Fetch the updated_on time from reminders table if due_time is not set
+        if due_time is None:
+            reminder_record = self.db.get_reminder_updated_on(user_id, task_id)
+            if reminder_record is None:
+                # Use current time if no reminder exists yet
+                updated_on = datetime.now()
+            else:
+                updated_on = reminder_record['updated_on']
+            due_time = updated_on.time()  # Use updated_on time as due_time if due_time is not set
 
-            # If still no due time, set a default time (e.g., 23:59)
-            if due_time is None:
-                due_time = time(23, 59)
+        # If still no due time, set a default time (e.g., 23:59)
+        if due_time is None:
+            due_time = time(23, 59)
 
-            # Combine due_date and due_time to form the complete due datetime
-            due_datetime = datetime.combine(due_date, due_time)
+        # Combine due_date and due_time to form the complete due datetime
+        due_datetime = datetime.combine(due_date, due_time)
 
-            # Calculate reminder time
-            reminder_datetime = due_datetime - timedelta(minutes=reminder_time_minutes)
-            reminder_date = reminder_datetime.date()
-            reminder_time = reminder_datetime.time()
+        # Calculate reminder time
+        reminder_datetime = due_datetime - timedelta(minutes=reminder_time_minutes)
+        reminder_date = reminder_datetime.date()
+        reminder_time = reminder_datetime.time()
 
-            # Update the reminder in the database
-            self.db.add_reminder(user_id, task_id, reminder_date, reminder_time, current_user_task_id)
+        # Update the reminder in the database
+        self.db.add_reminder(user_id, task_id, reminder_date, reminder_time, current_user_task_id)
 
-            # Send confirmation message with the reminder time
-            await context.bot.send_message(chat_id=user_id, text=f"Reminder set for task ID {task_id}, {reminder_time_minutes} minutes before the due time.\nThe reminder will be sent at: {reminder_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+        # Send confirmation message with the reminder time
+        await context.bot.send_message(chat_id=user_id, text=f"Reminder set for task ID {task_id}, {reminder_time_minutes} minutes before the due time.\nThe reminder will be sent at: {reminder_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
 
-            # Remove the reminder selection buttons
-            try:
-                await query.message.delete()
-            except Exception as e:
-                print(f"Error deleting message: {e}")
+        # Remove the reminder selection buttons
+        try:
+            await query.message.delete()
+        except Exception as e:
+            print(f"Error deleting message: {e}")
 
     async def handle_message(self, update: Update, context: CallbackContext):
         if context.user_data.get('awaiting_custom_reminder_input'):
@@ -771,13 +874,13 @@ class TelegramBot:
 
             print(f"Processing reminder for task ID {task_id} at {reminder_date} {reminder_time}")
 
-            # Fetch task details to get the description
+            # Fetch task details to get the title
             task_details = self.db.get_task_details(chat_id, task_id)
             if not task_details:
                 print(f"Task details not found for task ID {task_id}")
                 continue  # If task details are not found, skip this reminder
 
-            task_description = task_details['description']
+            task_title = task_details['task_title']
 
             # Convert timedelta to time if necessary
             if isinstance(reminder_time, timedelta):
@@ -796,7 +899,7 @@ class TelegramBot:
             if reminder_datetime <= now:
                 print(f"Sending reminder for task ID {task_id} to user {chat_id}")
                 # Send the reminder message to the user
-                await self.application.bot.send_message(chat_id, text=f"Reminder for task '{task_description}' (ID: {task_id}): This task is due soon!")
+                await self.application.bot.send_message(chat_id, text=f"Reminder for task '{task_title}' (ID: {task_id}): This task is due soon!")
 
                 # Mark the reminder as sent
                 self.db.mark_reminder_as_sent(reminder['id'])
@@ -846,22 +949,53 @@ class TelegramBot:
         sys.exit(0)
 
     def run(self):
-        conv_handler = ConversationHandler(
+        create_conv_handler = ConversationHandler(
             entry_points=[CommandHandler('create', self.create_task_command)],
             states={
-                WAITING_FOR_DESCRIPTION: [MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_description)]
+                WAITING_FOR_TASK_TITLE: [MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_task_title)],
+                WAITING_FOR_DESCRIPTION: [MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_description)],
+                WAITING_FOR_ACTUAL_DESCRIPTION: [MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_actual_description)]
             },
-            fallbacks=[],
+            fallbacks=[]
+        )
+
+        search_conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('search', self.search_tasks_command)],
+            states={
+                WAITING_FOR_SEARCH_TERM: [MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_search_term)]
+            },
+            fallbacks=[]
+        )
+
+        delete_conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('delete', self.delete_task_command)],
+            states={
+                WAITING_FOR_TASK_ID_TO_DELETE: [MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_task_id_to_delete)]
+            },
+            fallbacks=[]
+        )
+
+        edit_task_conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('edit', self.edit_task_command)],
+            states={
+                WAITING_FOR_TASK_ID_TO_EDIT: [CallbackQueryHandler(self.handle_task_selection_to_edit, pattern='^edit_')],
+                WAITING_FOR_NEW_TASK_TITLE: [MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_new_task_title)],
+                WAITING_FOR_NEW_DESCRIPTION: [CallbackQueryHandler(self.handle_description_choice, pattern='^edit_')],
+                WAITING_FOR_ACTUAL_DESCRIPTION: [MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_new_task_description)],
+            },
+            fallbacks=[]
         )
 
         self.application.add_handler(CommandHandler('start', self.start_command))
         self.application.add_handler(CommandHandler('help', self.help_command))
         self.application.add_handler(CommandHandler('custom', self.custom_command))
-        self.application.add_handler(CommandHandler('create', self.create_task_command))
         self.application.add_handler(CommandHandler('list', self.list_tasks_command))
-        self.application.add_handler(CommandHandler('delete', self.delete_task_command))
         self.application.add_handler(CommandHandler('status', self.status_task_command))
-        self.application.add_handler(conv_handler)
+        self.application.add_handler(create_conv_handler)
+        self.application.add_handler(search_conv_handler)
+        self.application.add_handler(delete_conv_handler)
+        self.application.add_handler(edit_task_conv_handler)
+        self.application.add_handler(CommandHandler('edit', self.edit_task_command))
         self.application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_message))
         self.application.add_error_handler(self.error)
 
@@ -886,7 +1020,7 @@ class TelegramBot:
         self.application.add_handler(CallbackQueryHandler(self.handle_minute_selection, pattern='^minute_'))
 
         #search 
-        self.application.add_handler(CommandHandler('search', self.search_tasks_command))
+        # self.application.add_handler(CommandHandler('search', self.search_tasks_command))
         self.application.add_handler(CommandHandler('search_full_details', self.search_full_task_details_command))
 
         # reminder

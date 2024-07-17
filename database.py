@@ -55,15 +55,35 @@ class Database:
         finally:
             cursor.close()
 
-    def create_task(self, user_id, description):
-        user_task_id = self.get_next_user_task_id(user_id)
+    def create_task(self, user_id, task_title, description):
         self.verify_connection()
         cursor = self.connection.cursor()
         try:
-            sql = "INSERT INTO tasks (user_id, user_task_id, current_user_task_id, description, status) VALUES (%s, %s, %s, %s, 'incomplete')"
-            cursor.execute(sql, (user_id, user_task_id, user_task_id, description))
+            sql = "INSERT INTO tasks (user_id, task_title, description, status) VALUES (%s, %s, %s, 'Incomplete')"
+            cursor.execute(sql, (user_id, task_title, description))
             self.connection.commit()
-            return user_task_id
+            return cursor.lastrowid
+        except Exception as e:
+            print(f"Error creating task: {e}")
+            return None
+        finally:
+            cursor.close()
+
+    def update_task(self, user_id, current_user_task_id, new_task_title, new_description):
+        self.verify_connection()
+        cursor = self.connection.cursor()
+        try:
+            sql = """
+            UPDATE tasks
+            SET task_title = %s, description = %s, updated_on = CURRENT_TIMESTAMP
+            WHERE user_id = %s AND current_user_task_id = %s AND is_deleted = 0
+            """
+            cursor.execute(sql, (new_task_title, new_description, user_id, current_user_task_id))
+            self.connection.commit()
+            return cursor.rowcount > 0
+        except mysql.connector.Error as err:
+            print(f"Error updating task: {err}")
+            return False
         finally:
             cursor.close()
 
@@ -71,7 +91,7 @@ class Database:
         self.verify_connection()
         cursor = self.connection.cursor()
         try:
-            sql = "SELECT id, user_task_id, description, status, due_date, due_time FROM tasks WHERE user_id = %s AND is_deleted = 0 ORDER BY user_task_id"
+            sql = "SELECT id, user_task_id, task_title, description, status, due_date, due_time FROM tasks WHERE user_id = %s AND is_deleted = 0 ORDER BY user_task_id"
             cursor.execute(sql, (user_id,))
             tasks = cursor.fetchall()
 
@@ -84,7 +104,7 @@ class Database:
             self.connection.commit()
 
             # Fetch updated tasks with current_user_task_id
-            sql = "SELECT current_user_task_id, description, status, due_date, due_time FROM tasks WHERE user_id = %s AND is_deleted = 0 ORDER BY current_user_task_id"
+            sql = "SELECT current_user_task_id, task_title, description, status, due_date, due_time FROM tasks WHERE user_id = %s AND is_deleted = 0 ORDER BY current_user_task_id"
             cursor.execute(sql, (user_id,))
             tasks = cursor.fetchall()
             return tasks
@@ -309,42 +329,39 @@ class Database:
         finally:
             cursor.close()
 
-    # Update get_task_details to use current_user_task_id
     def get_task_details(self, user_id, current_user_task_id):
         self.verify_connection()
         cursor = self.connection.cursor()
         try:
             cursor.execute(
-                "SELECT description, is_deleted, due_date, due_time FROM tasks WHERE user_id = %s AND current_user_task_id = %s",
+                "SELECT task_title, description, is_deleted, due_date, due_time FROM tasks WHERE user_id = %s AND current_user_task_id = %s",
                 (user_id, current_user_task_id)
             )
             result = cursor.fetchone()
             if result:
-                print(f"Fetched task details: {result}")  # Add this line
                 return {
-                    'description': result[0],
-                    'is_deleted': bool(result[1]),
-                    'due_date': result[2],
-                    'due_time': result[3]
+                    'task_title': result[0],
+                    'description': result[1],
+                    'is_deleted': bool(result[2]),
+                    'due_date': result[3],
+                    'due_time': result[4]
                 }
-            print(f"No task found with current_user_task_id: {current_user_task_id}")  # Add this line
             return None
         finally:
             cursor.close()
 
-    # Update the get_task_details_by_current_user_task_id method to fetch the updated_on timestamp
     def get_task_details_by_current_user_task_id(self, user_id, current_user_task_id):
         self.verify_connection()
-        cursor = self.connection.cursor(dictionary=True)  # Using dictionary cursor to fetch results as dictionaries
+        cursor = self.connection.cursor(dictionary=True)
         try:
             cursor.execute(
-                "SELECT current_user_task_id, description, status, due_date, due_time, updated_on, is_deleted FROM tasks WHERE user_id = %s AND current_user_task_id = %s AND is_deleted = 0",
+                "SELECT current_user_task_id, task_title, description, status, due_date, due_time, updated_on, is_deleted FROM tasks WHERE user_id = %s AND current_user_task_id = %s AND is_deleted = 0",
                 (user_id, current_user_task_id)
             )
             result = cursor.fetchone()
             if result:
-                print("Fetched task details:", result)  # Debugging output
                 return {
+                    'task_title': result['task_title'],
                     'description': result['description'],
                     'status': result['status'],
                     'due_date': result['due_date'],
@@ -352,9 +369,7 @@ class Database:
                     'updated_on': result['updated_on'],
                     'is_deleted': result['is_deleted']
                 }
-            else:
-                print("No task found with ID:", current_user_task_id)  # Debugging output
-                return None
+            return None
         finally:
             cursor.close()
 
@@ -388,27 +403,26 @@ class Database:
             cursor.close()
 
     def search_tasks_full_details(self, user_id):
-        self.verify_connection()
         cursor = self.connection.cursor(dictionary=True)
         query = """
-        SELECT current_user_task_id, description, status, due_date, due_time FROM tasks 
+        SELECT current_user_task_id, task_title, status, due_date FROM tasks 
         WHERE user_id = %s AND due_date IS NOT NULL AND is_deleted = 0
-        ORDER BY due_date
+        ORDER BY current_user_task_id
         """
         cursor.execute(query, (user_id,))
         result = cursor.fetchall()
         cursor.close()
         return result
 
-    def search_tasks_by_description(self, user_id, search_term):
+    def search_tasks(self, user_id, search_term):
         cursor = self.connection.cursor(dictionary=True)
         query = """
-        SELECT current_user_task_id, description, status FROM tasks 
-        WHERE user_id = %s AND LOWER(description) LIKE %s AND is_deleted = 0
+        SELECT current_user_task_id, task_title, description, status FROM tasks 
+        WHERE user_id = %s AND (LOWER(task_title) LIKE %s OR LOWER(description) LIKE %s) AND is_deleted = 0
         ORDER BY current_user_task_id
         """
         search_like = f"%{search_term}%"
-        cursor.execute(query, (user_id, search_like))
+        cursor.execute(query, (user_id, search_like, search_like))
         result = cursor.fetchall()
         cursor.close()
         return result
@@ -442,16 +456,16 @@ class Database:
             cursor.close()
 
     def list_tasks_for_reminders(self, user_id):
-        self.verify_connection()
         cursor = self.connection.cursor(dictionary=True)
-        try:
-            # Fetch all active tasks
-            sql = "SELECT current_user_task_id, description, status FROM tasks WHERE user_id = %s AND is_deleted = 0 ORDER BY current_user_task_id"
-            cursor.execute(sql, (user_id,))
-            tasks = cursor.fetchall()
-            return tasks
-        finally:
-            cursor.close()
+        query = """
+        SELECT current_user_task_id, task_title FROM tasks 
+        WHERE user_id = %s AND is_deleted = 0
+        ORDER BY current_user_task_id
+        """
+        cursor.execute(query, (user_id,))
+        tasks = cursor.fetchall()
+        cursor.close()
+        return tasks
 
     def add_reminder(self, user_id, task_id, reminder_date, reminder_time, current_user_task_id):
         self.verify_connection()
